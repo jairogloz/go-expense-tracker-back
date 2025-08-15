@@ -40,19 +40,17 @@ Return a JSON array of transactions with the following structure:
       "category": "food",
       "type": "expense",
       "date": "2024-01-15T12:00:00Z",
-      "vendor": "Restaurant Name",
       "description": "Lunch at restaurant"
     }
   ]
 }
 
 Rules:
-1. If no date is specified, use the current date
+1. If no date and time is specified, use the current date and time.
 2. Default currency is MXN if not specified
 3. Amount should be positive (the type field indicates income/expense)
 4. Choose the most appropriate category from the available list
-5. Extract vendor name from the text
-6. If multiple transactions are mentioned, create separate objects for each
+5. If multiple transactions are mentioned, create separate objects for each
 
 Parse this text:`
 
@@ -91,7 +89,6 @@ Parse this text:`
 			Category    string  `json:"category"`
 			Type        string  `json:"type"`
 			Date        string  `json:"date"`
-			Vendor      string  `json:"vendor"`
 			Description string  `json:"description"`
 		} `json:"transactions"`
 	}
@@ -131,7 +128,6 @@ Parse this text:`
 			Category:    category,
 			Type:        transactionType,
 			Date:        date,
-			Vendor:      t.Vendor,
 			Description: t.Description,
 		}
 

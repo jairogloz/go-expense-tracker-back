@@ -41,7 +41,6 @@ type Transaction struct {
 	Category    Category        `json:"category"`
 	Type        TransactionType `json:"type"`
 	Date        time.Time       `json:"date"`
-	Vendor      string          `json:"vendor"`
 	Description string          `json:"description,omitempty"`
 }
 
@@ -54,4 +53,14 @@ type ParseInputRequest struct {
 type ParseInputResponse struct {
 	Transactions []Transaction `json:"transactions"`
 	Message      string        `json:"message,omitempty"`
+}
+
+// UpdateTransactionRequest represents the request for updating a transaction
+type UpdateTransactionRequest struct {
+	Amount      float64         `json:"amount" binding:"required,gt=0"`
+	Currency    string          `json:"currency" binding:"required,len=3"`
+	Category    Category        `json:"category" binding:"required"`
+	Type        TransactionType `json:"type" binding:"required"`
+	Date        time.Time       `json:"date" binding:"required"`
+	Description string          `json:"description"`
 }

@@ -12,6 +12,8 @@ type TransactionRepository interface {
 	SaveTransactions(ctx context.Context, transactions []Transaction) error
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 	GetTransactions(ctx context.Context, limit, offset int) ([]Transaction, error)
+	UpdateTransaction(ctx context.Context, transaction *Transaction) error
+	DeleteTransaction(ctx context.Context, id int) error
 }
 
 // TransactionService defines the port for transaction business logic
@@ -19,4 +21,6 @@ type TransactionService interface {
 	SaveTransactions(ctx context.Context, transactions []Transaction) error
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 	GetTransactions(ctx context.Context, limit, offset int) ([]Transaction, error)
+	UpdateTransaction(ctx context.Context, transaction *Transaction) error
+	DeleteTransaction(ctx context.Context, id int) error
 }

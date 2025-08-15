@@ -35,8 +35,8 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	defer tx.Rollback(ctx)
 
 	// Prepare the insert statement
-	stmt := `INSERT INTO transactions (amount, currency, category, type, date, vendor, description) 
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	stmt := `INSERT INTO transactions (amount, currency, category, type, date, description) 
+			 VALUES ($1, $2, $3, $4, $5, $6)`
 
 	for _, transaction := range transactions {
 		_, err := tx.Exec(ctx, stmt,
@@ -45,7 +45,6 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 			transaction.Category,
 			transaction.Type,
 			transaction.Date,
-			transaction.Vendor,
 			transaction.Description,
 		)
 		if err != nil {
@@ -63,7 +62,7 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 
 // GetTransactionByID retrieves a transaction by its ID
 func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
-	stmt := `SELECT id, amount, currency, category, type, date, vendor, description 
+	stmt := `SELECT id, amount, currency, category, type, date, description 
 			 FROM transactions WHERE id = $1`
 
 	var transaction domain.Transaction
@@ -74,7 +73,6 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 		&transaction.Category,
 		&transaction.Type,
 		&transaction.Date,
-		&transaction.Vendor,
 		&transaction.Description,
 	)
 
@@ -90,7 +88,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 
 // GetTransactions retrieves transactions with pagination
 func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, limit, offset int) ([]domain.Transaction, error) {
-	stmt := `SELECT id, amount, currency, category, type, date, vendor, description 
+	stmt := `SELECT id, amount, currency, category, type, date, description 
 			 FROM transactions ORDER BY date DESC LIMIT $1 OFFSET $2`
 
 	rows, err := r.db.Query(ctx, stmt, limit, offset)
@@ -109,7 +107,6 @@ func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, l
 			&transaction.Category,
 			&transaction.Type,
 			&transaction.Date,
-			&transaction.Vendor,
 			&transaction.Description,
 		)
 		if err != nil {
@@ -135,7 +132,6 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 		category VARCHAR(50) NOT NULL,
 		type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
 		date TIMESTAMP NOT NULL,
-		vendor VARCHAR(255) NOT NULL,
 		description TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -152,6 +148,51 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	_, err := r.db.Exec(ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to create transactions table: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateTransaction updates an existing transaction
+func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context, transaction *domain.Transaction) error {
+	stmt := `UPDATE transactions 
+			 SET amount = $2, currency = $3, category = $4, type = $5, date = $6, description = $7, updated_at = CURRENT_TIMESTAMP
+			 WHERE id = $1`
+
+	result, err := r.db.Exec(ctx, stmt,
+		transaction.ID,
+		transaction.Amount,
+		transaction.Currency,
+		transaction.Category,
+		transaction.Type,
+		transaction.Date,
+		transaction.Description,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("transaction with id %d not found", transaction.ID)
+	}
+
+	return nil
+}
+
+// DeleteTransaction deletes a transaction by ID
+func (r *PostgreSQLTransactionRepository) DeleteTransaction(ctx context.Context, id int) error {
+	stmt := `DELETE FROM transactions WHERE id = $1`
+
+	result, err := r.db.Exec(ctx, stmt, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete transaction: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("transaction with id %d not found", id)
 	}
 
 	return nil

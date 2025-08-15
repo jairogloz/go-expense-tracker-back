@@ -41,4 +41,28 @@ echo "5. Getting specific transaction (ID 1):"
 curl -s "$API_BASE/transactions/1" | jq . || echo "Response: $(curl -s $API_BASE/transactions/1)"
 echo ""
 
+# Update transaction (ID 1)
+echo "6. Updating transaction (ID 1):"
+curl -s -X PUT "$API_BASE/transactions/1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 30.00,
+    "currency": "MXN",
+    "category": "food",
+    "type": "expense",
+    "date": "2024-08-14T10:00:00Z",
+    "description": "Updated lunch expense"
+  }' | jq . || echo "Response: $(curl -s -X PUT $API_BASE/transactions/1 -H 'Content-Type: application/json' -d '{"amount": 30.00, "currency": "MXN", "category": "food", "type": "expense", "date": "2024-08-14T10:00:00Z", "description": "Updated lunch expense"}')"
+echo ""
+
+# Get the updated transaction
+echo "7. Getting updated transaction (ID 1):"
+curl -s "$API_BASE/transactions/1" | jq . || echo "Response: $(curl -s $API_BASE/transactions/1)"
+echo ""
+
+# Delete transaction (ID 1) - uncomment to test deletion
+# echo "8. Deleting transaction (ID 1):"
+# curl -s -X DELETE "$API_BASE/transactions/1" | jq . || echo "Response: $(curl -s -X DELETE $API_BASE/transactions/1)"
+# echo ""
+
 echo "✅ API testing complete!"

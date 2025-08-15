@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     category VARCHAR(50) NOT NULL,
     type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
     date TIMESTAMP NOT NULL,
-    vendor VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -19,7 +18,6 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
-CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON transactions(vendor);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
 
 -- Create a function to update the updated_at timestamp
@@ -44,5 +42,4 @@ COMMENT ON COLUMN transactions.currency IS 'ISO 4217 currency code (e.g., USD, E
 COMMENT ON COLUMN transactions.category IS 'Predefined category for the transaction';
 COMMENT ON COLUMN transactions.type IS 'Transaction type: income or expense';
 COMMENT ON COLUMN transactions.date IS 'Date when the transaction occurred';
-COMMENT ON COLUMN transactions.vendor IS 'Merchant or source of the transaction';
 COMMENT ON COLUMN transactions.description IS 'Additional details about the transaction';
