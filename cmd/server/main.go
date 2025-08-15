@@ -24,8 +24,9 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Create context for database operations
-	ctx := context.Background()
+	// Create context with timeout for db connection
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	// Initialize database connection
 	db, err := infra.NewDatabaseConnection(ctx, cfg)
@@ -36,6 +37,9 @@ func main() {
 
 	// Initialize repository
 	transactionRepo := infra.NewPostgreSQLTransactionRepository(db)
+
+	// Use background context for the rest of the operations
+	ctx = context.Background()
 
 	// Create tables if they don't exist
 	if err := transactionRepo.CreateTransactionsTable(ctx); err != nil {
@@ -105,7 +109,7 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// Give outstanding requests 30 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

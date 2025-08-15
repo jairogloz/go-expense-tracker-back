@@ -21,7 +21,6 @@ type DatabaseConfig struct {
 	User     string
 	Password string
 	Name     string
-	SSLMode  string
 }
 
 // OpenAIConfig holds OpenAI configuration
@@ -37,7 +36,7 @@ type ServerConfig struct {
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	// Load .env file if it exists
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(".env.local"); err != nil {
 		// It's okay if .env doesn't exist in production
 		fmt.Println("Warning: .env file not found, using environment variables")
 	}
@@ -49,7 +48,6 @@ func Load() (*Config, error) {
 			User:     getEnv("DB_USER", ""),
 			Password: getEnv("DB_PASSWORD", ""),
 			Name:     getEnv("DB_NAME", ""),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		OpenAI: OpenAIConfig{
 			APIKey: getEnv("OPENAI_API_KEY", ""),
@@ -78,13 +76,12 @@ func Load() (*Config, error) {
 
 // GetDatabaseURL returns the PostgreSQL connection string
 func (c *Config) GetDatabaseURL() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require",
 		c.Database.User,
 		c.Database.Password,
 		c.Database.Host,
 		c.Database.Port,
 		c.Database.Name,
-		c.Database.SSLMode,
 	)
 }
 

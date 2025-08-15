@@ -73,11 +73,13 @@ go-expense-tracker-back/
 
 3. **Set up PostgreSQL database**
 
-   ```sql
-   CREATE DATABASE expense_tracker;
-   CREATE USER expense_user WITH PASSWORD 'expense_password';
-   GRANT ALL PRIVILEGES ON DATABASE expense_tracker TO expense_user;
-   ```
+> Note: Use Supabase `Session pooler` configuration.
+
+```sql
+CREATE DATABASE expense_tracker;
+CREATE USER expense_user WITH PASSWORD 'expense_password';
+GRANT ALL PRIVILEGES ON DATABASE expense_tracker TO expense_user;
+```
 
 4. **Configure environment variables**
    Copy `.env` file and update the values:
