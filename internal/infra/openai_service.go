@@ -36,7 +36,7 @@ Return a JSON array of transactions with the following structure:
   "transactions": [
     {
       "amount": 25.50,
-      "currency": "USD",
+      "currency": "MXN",
       "category": "food",
       "type": "expense",
       "date": "2024-01-15T12:00:00Z",
@@ -48,7 +48,7 @@ Return a JSON array of transactions with the following structure:
 
 Rules:
 1. If no date is specified, use the current date
-2. Default currency is USD if not specified
+2. Default currency is MXN if not specified
 3. Amount should be positive (the type field indicates income/expense)
 4. Choose the most appropriate category from the available list
 5. Extract vendor name from the text
