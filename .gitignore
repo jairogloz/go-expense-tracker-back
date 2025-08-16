@@ -1,32 +1,47 @@
-# Binaries for programs and plugins
+# Go Binaries and Build Artifacts
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-bin/
-expense-tracker
-
-# Test binary, built with `go test -c`
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+*.prof
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Go build output
+bin/
+dist/
+build/
+expense-tracker
+server
+main
+
+# Go modules and dependencies
+vendor/
+go.sum
 
 # Go workspace file
 go.work
+go.work.sum
 
-# IDE
+# Test artifacts
+*.test
+coverage.out
+coverage.html
+.coverage/
+
+# IDE and Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.vim/
+.emacs.d/
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# OS generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -34,42 +49,78 @@ go.work
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Environment variables
+# Environment and Configuration files
+.env
 .env.local
 .env.production
+.env.staging
+.env.development
+config.json
+config.yaml
+config.yml
+*.pem
+*.key
+*.crt
 
 # Logs
 *.log
+logs/
+log/
 
-# Runtime data
-pids
+# Runtime and Process files
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
 
-# nyc test coverage
-.nyc_output/
+# Database files (if using local DB for development)
+*.db
+*.sqlite
+*.sqlite3
 
-# Dependency directories
-node_modules/
+# Docker
+.dockerignore
+docker-compose.override.yml
 
-# Optional npm cache directory
-.npm
+# Air (Go live reload tool)
+.air.toml
+tmp/
 
-# Optional REPL history
-.node_repl_history
+# Terraform (if using for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
 
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file (keep template)
-.env
-
+# Development and Project Management
+TODO.md
+NOTES.md
 DEV-PLAN.md
+.scratch/
+.dev/
+
+# Generated documentation
+docs/generated/
+*.html
+
+# Protocol Buffers
+*.pb.go
+
+# Wire generated files
+wire_gen.go
+
+# Mockery generated mocks
+mocks/
+
+# Coverage reports from various tools
+c.out
+profile.out
+*.cover
