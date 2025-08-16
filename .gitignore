@@ -70,4 +70,6 @@ node_modules/
 .yarn-integrity
 
 # dotenv environment variables file (keep template)
-# .env
+.env
+
+DEV-PLAN.md
