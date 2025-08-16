@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,21 @@ import (
 	"github.com/jairogloz/go-expense-tracker-back/internal/app"
 	"github.com/jairogloz/go-expense-tracker-back/internal/domain"
 )
+
+// getUserID extracts the user ID from the Gin context
+func getUserID(c *gin.Context) (string, error) {
+	userID, exists := c.Get(string(domain.UserIDKey))
+	if !exists {
+		return "", fmt.Errorf("user ID not found in context")
+	}
+
+	id, ok := userID.(string)
+	if !ok {
+		return "", fmt.Errorf("user ID is not a string")
+	}
+
+	return id, nil
+}
 
 // TransactionHandler handles HTTP requests related to transactions
 type TransactionHandler struct {
@@ -26,6 +42,16 @@ func NewTransactionHandler(parseInputUseCase *app.ParseInputUseCase, transaction
 
 // ParseInput handles the POST /parse endpoint
 func (h *TransactionHandler) ParseInput(c *gin.Context) {
+	// Get user ID from context
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "User authentication required",
+			"details": err.Error(),
+		})
+		return
+	}
+
 	var request domain.ParseInputRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -35,7 +61,9 @@ func (h *TransactionHandler) ParseInput(c *gin.Context) {
 		return
 	}
 
-	response, err := h.parseInputUseCase.Execute(c.Request.Context(), request)
+	// Add user ID to context for the use case
+	ctx := context.WithValue(c.Request.Context(), domain.UserIDKey, userID)
+	response, err := h.parseInputUseCase.Execute(ctx, request)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to parse input",
@@ -198,7 +226,7 @@ func (h *TransactionHandler) DeleteTransaction(c *gin.Context) {
 }
 
 // SetupRoutes sets up the HTTP routes
-func (h *TransactionHandler) SetupRoutes(router *gin.Engine) {
+func (h *TransactionHandler) SetupRoutes(router gin.IRouter) {
 	router.POST("/parse", h.ParseInput)
 	router.GET("/transactions/:id", h.GetTransaction)
 	router.GET("/transactions", h.GetTransactions)

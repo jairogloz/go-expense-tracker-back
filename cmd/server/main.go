@@ -53,45 +53,48 @@ func main() {
 	// Initialize use cases
 	parseInputUseCase := app.NewParseInputUseCase(aiService, transactionService)
 
+	// Initialize auth service
+	authService := infra.NewSupabaseAuthService(cfg)
+
 	// Initialize handlers
 	transactionHandler := handlers.NewTransactionHandler(parseInputUseCase, transactionService)
+	authMiddleware := handlers.NewAuthMiddleware(authService)
 
-	// Setup Gin router
-	router := gin.Default()
+	// Setup routes
+	r := gin.Default()
 
-	// Add middleware
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
-
-	// Add CORS middleware for development
-	router.Use(func(c *gin.Context) {
+	// Middleware
+	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
 		}
-
 		c.Next()
 	})
 
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
+	// Health check endpoint (no auth required)
+	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "healthy",
 			"time":   time.Now().UTC(),
 		})
 	})
 
-	// Setup routes
-	transactionHandler.SetupRoutes(router)
+	// Protected routes group
+	protected := r.Group("/")
+	protected.Use(authMiddleware.Authenticate())
+
+	// Setup routes with authentication
+	transactionHandler.SetupRoutes(protected)
 
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:    ":" + cfg.Server.Port,
-		Handler: router,
+		Handler: r,
 	}
 
 	// Start server in a goroutine

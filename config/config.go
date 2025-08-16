@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Database DatabaseConfig
 	OpenAI   OpenAIConfig
+	Supabase SupabaseConfig
 	Server   ServerConfig
 }
 
@@ -26,6 +27,13 @@ type DatabaseConfig struct {
 // OpenAIConfig holds OpenAI configuration
 type OpenAIConfig struct {
 	APIKey string
+}
+
+// SupabaseConfig holds Supabase configuration
+type SupabaseConfig struct {
+	URL       string
+	AnonKey   string
+	JWTSecret string
 }
 
 // ServerConfig holds server configuration
@@ -52,6 +60,11 @@ func Load() (*Config, error) {
 		OpenAI: OpenAIConfig{
 			APIKey: getEnv("OPENAI_API_KEY", ""),
 		},
+		Supabase: SupabaseConfig{
+			URL:       getEnv("SUPABASE_URL", ""),
+			AnonKey:   getEnv("SUPABASE_ANON_KEY", ""),
+			JWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
+		},
 		Server: ServerConfig{
 			Port: getEnv("PORT", "8080"),
 		},
@@ -69,6 +82,9 @@ func Load() (*Config, error) {
 	}
 	if config.OpenAI.APIKey == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY is required")
+	}
+	if config.Supabase.JWTSecret == "" {
+		return nil, fmt.Errorf("SUPABASE_JWT_SECRET is required")
 	}
 
 	return config, nil

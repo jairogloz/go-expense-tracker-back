@@ -7,6 +7,11 @@ type AIService interface {
 	ParseTextToTransactions(ctx context.Context, text string) ([]Transaction, error)
 }
 
+// AuthService defines the port for authentication operations
+type AuthService interface {
+	ValidateToken(ctx context.Context, token string) (*AuthUser, error)
+}
+
 // TransactionRepository defines the port for transaction persistence
 type TransactionRepository interface {
 	SaveTransactions(ctx context.Context, transactions []Transaction) error

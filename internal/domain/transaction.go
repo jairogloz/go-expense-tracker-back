@@ -64,3 +64,17 @@ type UpdateTransactionRequest struct {
 	Date        time.Time       `json:"date" binding:"required"`
 	Description string          `json:"description"`
 }
+
+// AuthUser represents an authenticated user
+type AuthUser struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
+
+// ContextKey represents the type for context keys
+type ContextKey string
+
+const (
+	// UserIDKey is the context key for storing user ID
+	UserIDKey ContextKey = "userID"
+)
