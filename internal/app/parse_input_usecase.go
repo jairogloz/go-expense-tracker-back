@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jairogloz/go-expense-tracker-back/internal/domain"
 )
@@ -22,6 +23,12 @@ func NewParseInputUseCase(aiService domain.AIService, transactionService domain.
 
 // Execute parses the input text and saves the resulting transactions
 func (uc *ParseInputUseCase) Execute(ctx context.Context, request domain.ParseInputRequest) (*domain.ParseInputResponse, error) {
+	// Extract user ID from context
+	userID, ok := ctx.Value(domain.UserIDKey).(string)
+	if !ok || userID == "" {
+		return nil, fmt.Errorf("user ID not found in context")
+	}
+
 	// Parse the text using AI service
 	transactions, err := uc.aiService.ParseTextToTransactions(ctx, request.Text)
 	if err != nil {
@@ -30,7 +37,7 @@ func (uc *ParseInputUseCase) Execute(ctx context.Context, request domain.ParseIn
 
 	// Save the transactions using transaction service
 	if len(transactions) > 0 {
-		if err := uc.transactionService.SaveTransactions(ctx, transactions); err != nil {
+		if err := uc.transactionService.SaveTransactions(ctx, userID, transactions); err != nil {
 			return nil, err
 		}
 	}

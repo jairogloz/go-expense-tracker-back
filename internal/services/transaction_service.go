@@ -18,27 +18,33 @@ func NewTransactionService(repo domain.TransactionRepository) *TransactionServic
 	}
 }
 
-// SaveTransactions saves multiple transactions
-func (s *TransactionServiceImpl) SaveTransactions(ctx context.Context, transactions []domain.Transaction) error {
-	return s.repo.SaveTransactions(ctx, transactions)
+// SaveTransactions saves multiple transactions for a specific user
+func (s *TransactionServiceImpl) SaveTransactions(ctx context.Context, userID string, transactions []domain.Transaction) error {
+	// Set the user ID for all transactions
+	for i := range transactions {
+		transactions[i].UserID = userID
+	}
+	return s.repo.SaveTransactions(ctx, userID, transactions)
 }
 
-// GetTransactionByID retrieves a transaction by its ID
-func (s *TransactionServiceImpl) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
-	return s.repo.GetTransactionByID(ctx, id)
+// GetTransactionByID retrieves a transaction by its ID for a specific user
+func (s *TransactionServiceImpl) GetTransactionByID(ctx context.Context, userID string, id int) (*domain.Transaction, error) {
+	return s.repo.GetTransactionByID(ctx, userID, id)
 }
 
-// GetTransactions retrieves transactions with pagination
-func (s *TransactionServiceImpl) GetTransactions(ctx context.Context, limit, offset int) ([]domain.Transaction, error) {
-	return s.repo.GetTransactions(ctx, limit, offset)
+// GetTransactions retrieves transactions for a specific user with pagination
+func (s *TransactionServiceImpl) GetTransactions(ctx context.Context, userID string, limit, offset int) ([]domain.Transaction, error) {
+	return s.repo.GetTransactions(ctx, userID, limit, offset)
 }
 
-// UpdateTransaction updates an existing transaction
-func (s *TransactionServiceImpl) UpdateTransaction(ctx context.Context, transaction *domain.Transaction) error {
-	return s.repo.UpdateTransaction(ctx, transaction)
+// UpdateTransaction updates an existing transaction for a specific user
+func (s *TransactionServiceImpl) UpdateTransaction(ctx context.Context, userID string, transaction *domain.Transaction) error {
+	// Ensure the transaction belongs to the user
+	transaction.UserID = userID
+	return s.repo.UpdateTransaction(ctx, userID, transaction)
 }
 
-// DeleteTransaction deletes a transaction by ID
-func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, id int) error {
-	return s.repo.DeleteTransaction(ctx, id)
+// DeleteTransaction deletes a transaction by ID for a specific user
+func (s *TransactionServiceImpl) DeleteTransaction(ctx context.Context, userID string, id int) error {
+	return s.repo.DeleteTransaction(ctx, userID, id)
 }

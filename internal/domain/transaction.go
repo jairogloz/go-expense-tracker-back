@@ -36,6 +36,7 @@ const (
 // Transaction represents a financial transaction
 type Transaction struct {
 	ID          int             `json:"id"`
+	UserID      string          `json:"user_id"`
 	Amount      float64         `json:"amount"`
 	Currency    string          `json:"currency"`
 	Category    Category        `json:"category"`

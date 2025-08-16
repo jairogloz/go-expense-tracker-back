@@ -77,6 +77,16 @@ func (h *TransactionHandler) ParseInput(c *gin.Context) {
 
 // GetTransaction handles GET /transactions/:id
 func (h *TransactionHandler) GetTransaction(c *gin.Context) {
+	// Get user ID from context
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "User authentication required",
+			"details": err.Error(),
+		})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -86,7 +96,7 @@ func (h *TransactionHandler) GetTransaction(c *gin.Context) {
 		return
 	}
 
-	transaction, err := h.transactionService.GetTransactionByID(c.Request.Context(), id)
+	transaction, err := h.transactionService.GetTransactionByID(c.Request.Context(), userID, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to get transaction",
@@ -107,6 +117,16 @@ func (h *TransactionHandler) GetTransaction(c *gin.Context) {
 
 // GetTransactions handles GET /transactions
 func (h *TransactionHandler) GetTransactions(c *gin.Context) {
+	// Get user ID from context
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "User authentication required",
+			"details": err.Error(),
+		})
+		return
+	}
+
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 
@@ -120,7 +140,7 @@ func (h *TransactionHandler) GetTransactions(c *gin.Context) {
 		offset = 0
 	}
 
-	transactions, err := h.transactionService.GetTransactions(c.Request.Context(), limit, offset)
+	transactions, err := h.transactionService.GetTransactions(c.Request.Context(), userID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to get transactions",
@@ -137,7 +157,18 @@ func (h *TransactionHandler) GetTransactions(c *gin.Context) {
 }
 
 // UpdateTransaction handles PUT /transactions/:id
+// UpdateTransaction handles PUT /transactions/:id
 func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
+	// Get user ID from context
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "User authentication required",
+			"details": err.Error(),
+		})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -156,8 +187,8 @@ func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
 		return
 	}
 
-	// Check if transaction exists
-	existing, err := h.transactionService.GetTransactionByID(c.Request.Context(), id)
+	// Check if transaction exists and belongs to user
+	existing, err := h.transactionService.GetTransactionByID(c.Request.Context(), userID, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to get transaction",
@@ -176,6 +207,7 @@ func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
 	// Create updated transaction
 	transaction := &domain.Transaction{
 		ID:          id,
+		UserID:      userID, // Ensure user ID is set
 		Amount:      request.Amount,
 		Currency:    request.Currency,
 		Category:    request.Category,
@@ -184,7 +216,7 @@ func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
 		Description: request.Description,
 	}
 
-	if err := h.transactionService.UpdateTransaction(c.Request.Context(), transaction); err != nil {
+	if err := h.transactionService.UpdateTransaction(c.Request.Context(), userID, transaction); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to update transaction",
 			"details": err.Error(),
@@ -197,6 +229,16 @@ func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
 
 // DeleteTransaction handles DELETE /transactions/:id
 func (h *TransactionHandler) DeleteTransaction(c *gin.Context) {
+	// Get user ID from context
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "User authentication required",
+			"details": err.Error(),
+		})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -206,8 +248,8 @@ func (h *TransactionHandler) DeleteTransaction(c *gin.Context) {
 		return
 	}
 
-	if err := h.transactionService.DeleteTransaction(c.Request.Context(), id); err != nil {
-		if err.Error() == fmt.Sprintf("transaction with id %d not found", id) {
+	if err := h.transactionService.DeleteTransaction(c.Request.Context(), userID, id); err != nil {
+		if err.Error() == fmt.Sprintf("transaction with id %d not found or doesn't belong to user", id) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "Transaction not found",
 			})

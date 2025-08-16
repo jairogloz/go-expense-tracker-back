@@ -22,7 +22,7 @@ func NewPostgreSQLTransactionRepository(db *pgxpool.Pool) *PostgreSQLTransaction
 }
 
 // SaveTransactions saves multiple transactions to the database
-func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, transactions []domain.Transaction) error {
+func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, userID string, transactions []domain.Transaction) error {
 	if len(transactions) == 0 {
 		return nil
 	}
@@ -35,11 +35,12 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	defer tx.Rollback(ctx)
 
 	// Prepare the insert statement
-	stmt := `INSERT INTO transactions (amount, currency, category, type, date, description) 
-			 VALUES ($1, $2, $3, $4, $5, $6)`
+	stmt := `INSERT INTO transactions (user_id, amount, currency, category, type, date, description) 
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`
 
 	for _, transaction := range transactions {
 		_, err := tx.Exec(ctx, stmt,
+			userID,
 			transaction.Amount,
 			transaction.Currency,
 			transaction.Category,
@@ -60,14 +61,15 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	return nil
 }
 
-// GetTransactionByID retrieves a transaction by its ID
-func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
-	stmt := `SELECT id, amount, currency, category, type, date, description 
-			 FROM transactions WHERE id = $1`
+// GetTransactionByID retrieves a transaction by its ID for a specific user
+func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context, userID string, id int) (*domain.Transaction, error) {
+	stmt := `SELECT id, user_id, amount, currency, category, type, date, description 
+			 FROM transactions WHERE id = $1 AND user_id = $2`
 
 	var transaction domain.Transaction
-	err := r.db.QueryRow(ctx, stmt, id).Scan(
+	err := r.db.QueryRow(ctx, stmt, id, userID).Scan(
 		&transaction.ID,
+		&transaction.UserID,
 		&transaction.Amount,
 		&transaction.Currency,
 		&transaction.Category,
@@ -78,7 +80,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil // Transaction not found
+			return nil, nil // Transaction not found or doesn't belong to user
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
@@ -86,12 +88,12 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 	return &transaction, nil
 }
 
-// GetTransactions retrieves transactions with pagination
-func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, limit, offset int) ([]domain.Transaction, error) {
-	stmt := `SELECT id, amount, currency, category, type, date, description 
-			 FROM transactions ORDER BY date DESC LIMIT $1 OFFSET $2`
+// GetTransactions retrieves transactions for a specific user with pagination
+func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, userID string, limit, offset int) ([]domain.Transaction, error) {
+	stmt := `SELECT id, user_id, amount, currency, category, type, date, description 
+			 FROM transactions WHERE user_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3`
 
-	rows, err := r.db.Query(ctx, stmt, limit, offset)
+	rows, err := r.db.Query(ctx, stmt, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query transactions: %w", err)
 	}
@@ -102,6 +104,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, l
 		var transaction domain.Transaction
 		err := rows.Scan(
 			&transaction.ID,
+			&transaction.UserID,
 			&transaction.Amount,
 			&transaction.Currency,
 			&transaction.Category,
@@ -127,7 +130,8 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	stmt := `
 	CREATE TABLE IF NOT EXISTS transactions (
 		id SERIAL PRIMARY KEY,
-		amount DECIMAL(12,2) NOT NULL,
+		user_id UUID NOT NULL,
+		amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
 		currency VARCHAR(3) NOT NULL DEFAULT 'USD',
 		category VARCHAR(50) NOT NULL,
 		type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
@@ -137,12 +141,19 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	
-	-- Create index on date for better query performance
+	-- Create indexes for better query performance
+	-- Primary index for user-scoped queries (most important)
+	CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+	-- Composite indexes for common query patterns
+	CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
+	CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON transactions(user_id, category);
+	CREATE INDEX IF NOT EXISTS idx_transactions_user_type ON transactions(user_id, type);
+	CREATE INDEX IF NOT EXISTS idx_transactions_user_created_at ON transactions(user_id, created_at DESC);
+	-- Individual indexes for filtering
 	CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-	-- Create index on type for filtering
 	CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
-	-- Create index on category for filtering
 	CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
+	CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
 	`
 
 	_, err := r.db.Exec(ctx, stmt)
@@ -153,14 +164,15 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	return nil
 }
 
-// UpdateTransaction updates an existing transaction
-func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context, transaction *domain.Transaction) error {
+// UpdateTransaction updates an existing transaction for a specific user
+func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context, userID string, transaction *domain.Transaction) error {
 	stmt := `UPDATE transactions 
-			 SET amount = $2, currency = $3, category = $4, type = $5, date = $6, description = $7, updated_at = CURRENT_TIMESTAMP
-			 WHERE id = $1`
+			 SET amount = $3, currency = $4, category = $5, type = $6, date = $7, description = $8, updated_at = CURRENT_TIMESTAMP
+			 WHERE id = $1 AND user_id = $2`
 
 	result, err := r.db.Exec(ctx, stmt,
 		transaction.ID,
+		userID,
 		transaction.Amount,
 		transaction.Currency,
 		transaction.Category,
@@ -175,24 +187,24 @@ func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context,
 
 	rowsAffected := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("transaction with id %d not found", transaction.ID)
+		return fmt.Errorf("transaction with id %d not found or doesn't belong to user", transaction.ID)
 	}
 
 	return nil
 }
 
-// DeleteTransaction deletes a transaction by ID
-func (r *PostgreSQLTransactionRepository) DeleteTransaction(ctx context.Context, id int) error {
-	stmt := `DELETE FROM transactions WHERE id = $1`
+// DeleteTransaction deletes a transaction by ID for a specific user
+func (r *PostgreSQLTransactionRepository) DeleteTransaction(ctx context.Context, userID string, id int) error {
+	stmt := `DELETE FROM transactions WHERE id = $1 AND user_id = $2`
 
-	result, err := r.db.Exec(ctx, stmt, id)
+	result, err := r.db.Exec(ctx, stmt, id, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
 	}
 
 	rowsAffected := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("transaction with id %d not found", id)
+		return fmt.Errorf("transaction with id %d not found or doesn't belong to user", id)
 	}
 
 	return nil
