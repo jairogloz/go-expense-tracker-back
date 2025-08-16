@@ -25,7 +25,8 @@ func NewOpenAIService(apiKey string) *OpenAIService {
 
 // ParseTextToTransactions parses natural language text into structured transactions
 func (s *OpenAIService) ParseTextToTransactions(ctx context.Context, text string) ([]domain.Transaction, error) {
-	systemPrompt := `You are a financial transaction parser. Parse the given text into structured transaction data.
+	now := time.Now().UTC().Format(time.RFC3339)
+	systemPrompt := fmt.Sprintf(`You are a financial transaction parser. Parse the given text into structured transaction data.
 
 Available categories:
 - Expense: food, transport, utilities, shopping, health, education, entertainment, other
@@ -51,8 +52,10 @@ Rules:
 3. Amount should be positive (the type field indicates income/expense)
 4. Choose the most appropriate category from the available list
 5. If multiple transactions are mentioned, create separate objects for each
+6. ALWAYS preserve the original language in descriptions - DO NOT TRANSLATE
+7. Consider this date as the current date: %s
 
-Parse this text:`
+Parse this text:`, now)
 
 	req := openai.ChatCompletionRequest{
 		Model: openai.GPT3Dot5Turbo,
