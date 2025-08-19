@@ -35,15 +35,19 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize repository
+	// Initialize repositories
 	transactionRepo := infra.NewPostgreSQLTransactionRepository(db)
+	accountRepo := infra.NewPostgreSQLAccountRepository(db)
 
 	// Use background context for the rest of the operations
 	ctx = context.Background()
 
 	// Create tables if they don't exist
 	if err := transactionRepo.CreateTransactionsTable(ctx); err != nil {
-		log.Fatalf("Failed to create database tables: %v", err)
+		log.Fatalf("Failed to create transactions table: %v", err)
+	}
+	if err := accountRepo.CreateAccountsTable(ctx); err != nil {
+		log.Fatalf("Failed to create accounts table: %v", err)
 	}
 
 	// Initialize services
@@ -51,13 +55,16 @@ func main() {
 	transactionService := services.NewTransactionService(transactionRepo)
 
 	// Initialize use cases
-	parseInputUseCase := app.NewParseInputUseCase(aiService, transactionService)
+	accountBalanceUseCase := app.NewAccountBalanceUseCase(accountRepo, transactionRepo)
+	accountService := services.NewAccountService(accountRepo, accountBalanceUseCase)
+	parseInputUseCase := app.NewParseInputUseCase(aiService, transactionService, accountService)
 
 	// Initialize auth service
 	authService := infra.NewSupabaseAuthService(cfg)
 
 	// Initialize handlers
 	transactionHandler := handlers.NewTransactionHandler(parseInputUseCase, transactionService)
+	accountHandler := handlers.NewAccountHandler(accountService)
 	authMiddleware := handlers.NewAuthMiddleware(authService)
 
 	// Setup routes
@@ -90,6 +97,7 @@ func main() {
 
 	// Setup routes with authentication
 	transactionHandler.SetupRoutes(protected)
+	accountHandler.SetupAccountRoutes(protected)
 
 	// Create HTTP server
 	srv := &http.Server{

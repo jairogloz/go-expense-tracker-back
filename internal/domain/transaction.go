@@ -37,6 +37,7 @@ const (
 type Transaction struct {
 	ID          int             `json:"id"`
 	UserID      string          `json:"user_id"`
+	AccountID   *string         `json:"account_id,omitempty"` // Nullable for backward compatibility
 	Amount      float64         `json:"amount"`
 	Currency    string          `json:"currency"`
 	Category    Category        `json:"category"`
