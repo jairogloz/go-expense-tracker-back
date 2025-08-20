@@ -35,8 +35,8 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	defer tx.Rollback(ctx)
 
 	// Prepare the insert statement
-	stmt := `INSERT INTO transactions (user_id, account_id, amount, currency, category, type, date, description) 
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	stmt := `INSERT INTO transactions (user_id, account_id, amount, currency, category, type, date, description, sub_category) 
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	for _, transaction := range transactions {
 		_, err := tx.Exec(ctx, stmt,
@@ -48,6 +48,7 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 			transaction.Type,
 			transaction.Date,
 			transaction.Description,
+			transaction.SubCategory,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert transaction: %w", err)
@@ -64,7 +65,7 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 
 // GetTransactionByID retrieves a transaction by its ID for a specific user
 func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context, userID string, id int) (*domain.Transaction, error) {
-	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description 
+	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description, sub_category 
 			 FROM transactions WHERE id = $1 AND user_id = $2`
 
 	var transaction domain.Transaction
@@ -78,6 +79,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 		&transaction.Type,
 		&transaction.Date,
 		&transaction.Description,
+		&transaction.SubCategory,
 	)
 
 	if err != nil {
@@ -92,7 +94,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 
 // GetTransactions retrieves transactions for a specific user with pagination
 func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, userID string, limit, offset int) ([]domain.Transaction, error) {
-	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description 
+	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description, sub_category 
 			 FROM transactions WHERE user_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, stmt, userID, limit, offset)
@@ -114,6 +116,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, u
 			&transaction.Type,
 			&transaction.Date,
 			&transaction.Description,
+			&transaction.SubCategory,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan transaction: %w", err)
@@ -130,47 +133,29 @@ func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, u
 
 // CreateTransactionsTable creates the transactions table if it doesn't exist
 func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Context) error {
-	// First, create the table with basic schema if it doesn't exist
+	// Create the table with foreign key constraint from the start
 	createTableStmt := `
 	CREATE TABLE IF NOT EXISTS transactions (
 		id SERIAL PRIMARY KEY,
 		user_id UUID NOT NULL,
+		account_id UUID,
 		amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
 		currency VARCHAR(3) NOT NULL DEFAULT 'USD',
 		category VARCHAR(50) NOT NULL,
 		type VARCHAR(10) NOT NULL CHECK (type IN ('income', 'expense')),
 		date TIMESTAMP NOT NULL,
 		description TEXT,
+		sub_category VARCHAR(100),
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		CONSTRAINT fk_transactions_account_id 
+			FOREIGN KEY (account_id) REFERENCES accounts(id) 
+			ON DELETE SET NULL
 	);`
 
 	_, err := r.db.Exec(ctx, createTableStmt)
 	if err != nil {
 		return fmt.Errorf("failed to create transactions table: %w", err)
-	}
-
-	// Check if account_id column exists and add it if it doesn't
-	checkColumnStmt := `
-	SELECT column_name 
-	FROM information_schema.columns 
-	WHERE table_name = 'transactions' AND column_name = 'account_id';`
-
-	rows, err := r.db.Query(ctx, checkColumnStmt)
-	if err != nil {
-		return fmt.Errorf("failed to check for account_id column: %w", err)
-	}
-	defer rows.Close()
-
-	hasAccountID := rows.Next()
-	rows.Close()
-
-	if !hasAccountID {
-		addColumnStmt := `ALTER TABLE transactions ADD COLUMN account_id UUID;`
-		_, err = r.db.Exec(ctx, addColumnStmt)
-		if err != nil {
-			return fmt.Errorf("failed to add account_id column: %w", err)
-		}
 	}
 
 	// Create indexes for better query performance
@@ -190,6 +175,8 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 	CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
 	CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+	-- Sub-category index for filtering
+	CREATE INDEX IF NOT EXISTS idx_transactions_sub_category ON transactions(sub_category);
 	`
 
 	_, err = r.db.Exec(ctx, indexStmt)
@@ -203,7 +190,7 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 // UpdateTransaction updates an existing transaction for a specific user
 func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context, userID string, transaction *domain.Transaction) error {
 	stmt := `UPDATE transactions 
-			 SET account_id = $3, amount = $4, currency = $5, category = $6, type = $7, date = $8, description = $9, updated_at = CURRENT_TIMESTAMP
+			 SET account_id = $3, amount = $4, currency = $5, category = $6, type = $7, date = $8, description = $9, sub_category = $10, updated_at = CURRENT_TIMESTAMP
 			 WHERE id = $1 AND user_id = $2`
 
 	result, err := r.db.Exec(ctx, stmt,
@@ -216,6 +203,7 @@ func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context,
 		transaction.Type,
 		transaction.Date,
 		transaction.Description,
+		transaction.SubCategory,
 	)
 
 	if err != nil {

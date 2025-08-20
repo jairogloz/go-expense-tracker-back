@@ -42,12 +42,12 @@ func main() {
 	// Use background context for the rest of the operations
 	ctx = context.Background()
 
-	// Create tables if they don't exist
-	if err := transactionRepo.CreateTransactionsTable(ctx); err != nil {
-		log.Fatalf("Failed to create transactions table: %v", err)
-	}
+	// Create tables if they don't exist (accounts first, then transactions due to FK)
 	if err := accountRepo.CreateAccountsTable(ctx); err != nil {
 		log.Fatalf("Failed to create accounts table: %v", err)
+	}
+	if err := transactionRepo.CreateTransactionsTable(ctx); err != nil {
+		log.Fatalf("Failed to create transactions table: %v", err)
 	}
 
 	// Initialize services
