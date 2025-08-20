@@ -54,7 +54,8 @@ Rules:
 4. Choose the most appropriate category from the available list
 5. If multiple transactions are mentioned, create separate objects for each
 6. ALWAYS preserve the original language in descriptions - DO NOT TRANSLATE
-7. Consider this date as the current date: %s
+7. Do NOT include the amount or currency in the description field - keep descriptions focused on what the transaction was for
+8. Consider this date as the current date: %s
 
 Parse this text:`, now)
 
@@ -182,12 +183,7 @@ Subcategories for each category are:
   ],
   "savings_goals": [
     "emergency_fund",
-    "vacation_savings",
-    "vehicle_savings",
-    "wedding_savings",
-    "home_down_payment",
-    "medical_savings",
-    "technology_savings"
+    "vacation_savings"
   ],
   "guilt_free_spending": [
     "dining_out",
@@ -211,11 +207,11 @@ Return a JSON array of transactions with the following structure:
       "amount": 25.50,
       "currency": "MXN",
       "category": "fixed_costs",
-			"sub_category": "rent",
+			"sub_category": "utilities",
       "type": "expense",
       "date": "2024-01-15T12:00:00Z",
-      "description": "Lunch at restaurant",
-      "account_id": "<account_id>"
+      "description": "Electricity bill",
+      "account_name": "Credit Card"
     }
   ]
 }
@@ -228,7 +224,8 @@ Rules:
 5. If multiple transactions are mentioned, create separate objects for each
 6. ALWAYS preserve the original language in descriptions - DO NOT TRANSLATE
 7. For account_name: try to match account names mentioned in the text to the available accounts. If no account is mentioned or can be determined, use "default"
-8. Consider this date as the current date: %s
+8. Do NOT include the amount or currency in the description field - keep descriptions focused on what the transaction was for
+9. Consider this date as the current date: %s
 
 Parse this text:`, accountInfo, now)
 
@@ -269,7 +266,7 @@ Parse this text:`, accountInfo, now)
 			Type        string  `json:"type"`
 			Date        string  `json:"date"`
 			Description string  `json:"description"`
-			AccountID   string  `json:"account_id"`
+			AccountName string  `json:"account_name"`
 		} `json:"transactions"`
 	}
 
@@ -303,14 +300,14 @@ Parse this text:`, accountInfo, now)
 
 		// Map account name to account ID
 		var accountID *string
-		if t.AccountID != "" && t.AccountID != "default" {
-			// Try to find matching account ID
-			if id, exists := accountsMap[t.AccountID]; exists {
+		if t.AccountName != "" && t.AccountName != "default" {
+			// Try to find matching account ID by name
+			if id, exists := accountsMap[t.AccountName]; exists {
 				accountID = &id
 			} else {
-				// If account ID doesn't match exactly, try case-insensitive match
+				// If account name doesn't match exactly, try case-insensitive match
 				for name, id := range accountsMap {
-					if strings.EqualFold(name, t.AccountID) {
+					if strings.EqualFold(name, t.AccountName) {
 						accountID = &id
 						break
 					}
@@ -323,11 +320,17 @@ Parse this text:`, accountInfo, now)
 			accountID = &defaultAccountID
 		}
 
+		// Handle SubCategory - only set if not empty
+		var subCategory *string
+		if t.SubCategory != "" {
+			subCategory = &t.SubCategory
+		}
+
 		transaction := domain.Transaction{
 			Amount:      t.Amount,
 			Currency:    t.Currency,
 			Category:    category,
-			SubCategory: &t.SubCategory,
+			SubCategory: subCategory,
 			Type:        transactionType,
 			Date:        date,
 			Description: t.Description,
