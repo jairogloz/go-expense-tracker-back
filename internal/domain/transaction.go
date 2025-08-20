@@ -60,12 +60,14 @@ type ParseInputResponse struct {
 
 // UpdateTransactionRequest represents the request for updating a transaction
 type UpdateTransactionRequest struct {
+	AccountID   *string         `json:"account_id,omitempty"`
 	Amount      float64         `json:"amount" binding:"required,gt=0"`
 	Currency    string          `json:"currency" binding:"required,len=3"`
 	Category    Category        `json:"category" binding:"required"`
 	Type        TransactionType `json:"type" binding:"required"`
 	Date        time.Time       `json:"date" binding:"required"`
 	Description string          `json:"description"`
+	SubCategory *string         `json:"sub_category,omitempty"`
 }
 
 // AuthUser represents an authenticated user
