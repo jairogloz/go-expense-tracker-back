@@ -158,8 +158,49 @@ func (s *OpenAIService) ParseTextToTransactionsWithAccounts(ctx context.Context,
 	systemPrompt := fmt.Sprintf(`You are a financial transaction parser. Parse the given text into structured transaction data.
 
 Available categories:
-- Expense: food, transport, utilities, shopping, health, education, entertainment, other
+- Expense: guilt_free, fixed_costs, investments and savings
 - Income: salary, freelance, investments, bonus
+
+Subcategories for each category are:
+{
+  "fixed_costs": [
+    "house_payments",
+    "utilities",
+    "internet_and_phone",
+    "insurance",
+    "loan_payments",
+    "subscriptions"
+  ],
+  "investments": [
+    "afore",
+    "cetes",
+    "mutual_funds",
+    "retirement_savings",
+    "stocks",
+    "real_estate",
+    "crypto"
+  ],
+  "savings_goals": [
+    "emergency_fund",
+    "vacation_savings",
+    "vehicle_savings",
+    "wedding_savings",
+    "home_down_payment",
+    "medical_savings",
+    "technology_savings"
+  ],
+  "guilt_free_spending": [
+    "dining_out",
+    "coffee_and_snacks",
+    "clothing_and_accessories",
+    "hobbies",
+    "entertainment",
+    "fitness_and_wellness",
+    "gifts_and_celebrations",
+    "travel",
+    "gadgets_and_tech"
+  ]
+}
 
 %s
 
@@ -169,11 +210,12 @@ Return a JSON array of transactions with the following structure:
     {
       "amount": 25.50,
       "currency": "MXN",
-      "category": "food",
+      "category": "fixed_costs",
+			"sub_category": "rent",
       "type": "expense",
       "date": "2024-01-15T12:00:00Z",
       "description": "Lunch at restaurant",
-      "account_name": "Credit Card"
+      "account_id": "<account_id>"
     }
   ]
 }
@@ -223,10 +265,11 @@ Parse this text:`, accountInfo, now)
 			Amount      float64 `json:"amount"`
 			Currency    string  `json:"currency"`
 			Category    string  `json:"category"`
+			SubCategory string  `json:"sub_category"`
 			Type        string  `json:"type"`
 			Date        string  `json:"date"`
 			Description string  `json:"description"`
-			AccountName string  `json:"account_name"`
+			AccountID   string  `json:"account_id"`
 		} `json:"transactions"`
 	}
 
@@ -260,14 +303,14 @@ Parse this text:`, accountInfo, now)
 
 		// Map account name to account ID
 		var accountID *string
-		if t.AccountName != "" && t.AccountName != "default" {
+		if t.AccountID != "" && t.AccountID != "default" {
 			// Try to find matching account ID
-			if id, exists := accountsMap[t.AccountName]; exists {
+			if id, exists := accountsMap[t.AccountID]; exists {
 				accountID = &id
 			} else {
-				// If account name doesn't match exactly, try case-insensitive match
+				// If account ID doesn't match exactly, try case-insensitive match
 				for name, id := range accountsMap {
-					if strings.EqualFold(name, t.AccountName) {
+					if strings.EqualFold(name, t.AccountID) {
 						accountID = &id
 						break
 					}
@@ -284,6 +327,7 @@ Parse this text:`, accountInfo, now)
 			Amount:      t.Amount,
 			Currency:    t.Currency,
 			Category:    category,
+			SubCategory: &t.SubCategory,
 			Type:        transactionType,
 			Date:        date,
 			Description: t.Description,

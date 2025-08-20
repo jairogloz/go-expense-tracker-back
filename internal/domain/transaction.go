@@ -36,14 +36,15 @@ const (
 // Transaction represents a financial transaction
 type Transaction struct {
 	ID          int             `json:"id"`
-	UserID      string          `json:"user_id"`
 	AccountID   *string         `json:"account_id,omitempty"` // Nullable for backward compatibility
 	Amount      float64         `json:"amount"`
-	Currency    string          `json:"currency"`
 	Category    Category        `json:"category"`
-	Type        TransactionType `json:"type"`
+	Currency    string          `json:"currency"`
 	Date        time.Time       `json:"date"`
 	Description string          `json:"description,omitempty"`
+	SubCategory *string         `json:"sub_category,omitempty"`
+	Type        TransactionType `json:"type"`
+	UserID      string          `json:"user_id"`
 }
 
 // ParseInputRequest represents the request for parsing natural language input
