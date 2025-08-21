@@ -7,17 +7,20 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jairogloz/go-expense-tracker-back/internal/domain"
+	"go.uber.org/zap"
 )
 
 // PostgreSQLTransactionRepository implements the TransactionRepository interface
 type PostgreSQLTransactionRepository struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
+	logger *zap.Logger
 }
 
 // NewPostgreSQLTransactionRepository creates a new PostgreSQL transaction repository
-func NewPostgreSQLTransactionRepository(db *pgxpool.Pool) *PostgreSQLTransactionRepository {
+func NewPostgreSQLTransactionRepository(db *pgxpool.Pool, logger *zap.Logger) *PostgreSQLTransactionRepository {
 	return &PostgreSQLTransactionRepository{
-		db: db,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -27,9 +30,23 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 		return nil
 	}
 
+	// Extract context info for logging
+	requestID := ctx.Value(domain.ContextKey("request_id"))
+
+	r.logger.Info("Starting database transaction save",
+		zap.String("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("transactions_count", len(transactions)),
+	)
+
 	// Start a transaction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
+		r.logger.Error("Failed to begin database transaction",
+			zap.String("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
@@ -38,7 +55,7 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	stmt := `INSERT INTO transactions (user_id, account_id, amount, currency, category, type, date, description, sub_category) 
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
-	for _, transaction := range transactions {
+	for i, transaction := range transactions {
 		_, err := tx.Exec(ctx, stmt,
 			userID,
 			transaction.AccountID, // This can be nil
@@ -51,14 +68,36 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 			transaction.SubCategory,
 		)
 		if err != nil {
+			r.logger.Error("Failed to insert transaction",
+				zap.String("user_id", userID),
+				zap.Any("request_id", requestID),
+				zap.Int("transaction_index", i),
+				zap.Error(err),
+				zap.Float64("amount", transaction.Amount),
+				zap.String("currency", transaction.Currency),
+				zap.String("category", string(transaction.Category)),
+				zap.String("type", string(transaction.Type)),
+				zap.Any("account_id", transaction.AccountID),
+			)
 			return fmt.Errorf("failed to insert transaction: %w", err)
 		}
 	}
 
 	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
+		r.logger.Error("Failed to commit database transaction",
+			zap.String("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.Error(err),
+		)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+
+	r.logger.Info("Successfully saved transactions to database",
+		zap.String("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("transactions_saved", len(transactions)),
+	)
 
 	return nil
 }

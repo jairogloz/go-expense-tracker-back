@@ -15,6 +15,7 @@ import (
 	"github.com/jairogloz/go-expense-tracker-back/internal/handlers"
 	"github.com/jairogloz/go-expense-tracker-back/internal/infra"
 	"github.com/jairogloz/go-expense-tracker-back/internal/services"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -23,6 +24,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	// Initialize logger
+	logger, err := infra.NewLogger()
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer logger.Sync()
+
+	logger.Info("Application starting",
+		zap.String("port", cfg.Server.Port),
+	)
 
 	// Create context with timeout for db connection
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -36,7 +48,7 @@ func main() {
 	defer db.Close()
 
 	// Initialize repositories
-	transactionRepo := infra.NewPostgreSQLTransactionRepository(db)
+	transactionRepo := infra.NewPostgreSQLTransactionRepository(db, logger)
 	accountRepo := infra.NewPostgreSQLAccountRepository(db)
 
 	// Use background context for the rest of the operations
@@ -51,7 +63,7 @@ func main() {
 	}
 
 	// Initialize services
-	aiService := infra.NewOpenAIService(cfg.OpenAI.APIKey)
+	aiService := infra.NewOpenAIService(cfg.OpenAI.APIKey, logger)
 	transactionService := services.NewTransactionService(transactionRepo)
 
 	// Initialize use cases
@@ -63,7 +75,7 @@ func main() {
 	authService := infra.NewSupabaseAuthService(cfg)
 
 	// Initialize handlers
-	transactionHandler := handlers.NewTransactionHandler(parseInputUseCase, transactionService)
+	transactionHandler := handlers.NewTransactionHandler(parseInputUseCase, transactionService, logger)
 	accountHandler := handlers.NewAccountHandler(accountService)
 	authMiddleware := handlers.NewAuthMiddleware(authService)
 

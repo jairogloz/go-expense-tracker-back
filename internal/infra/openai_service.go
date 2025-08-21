@@ -9,18 +9,21 @@ import (
 
 	"github.com/jairogloz/go-expense-tracker-back/internal/domain"
 	"github.com/sashabaranov/go-openai"
+	"go.uber.org/zap"
 )
 
 // OpenAIService implements the AIService interface
 type OpenAIService struct {
 	client *openai.Client
+	logger *zap.Logger
 }
 
 // NewOpenAIService creates a new OpenAI service
-func NewOpenAIService(apiKey string) *OpenAIService {
+func NewOpenAIService(apiKey string, logger *zap.Logger) *OpenAIService {
 	client := openai.NewClient(apiKey)
 	return &OpenAIService{
 		client: client,
+		logger: logger,
 	}
 }
 
@@ -144,6 +147,18 @@ Parse this text:`, now)
 
 // ParseTextToTransactionsWithAccounts parses natural language text into structured transactions with account context
 func (s *OpenAIService) ParseTextToTransactionsWithAccounts(ctx context.Context, text string, accountsMap map[string]string) ([]domain.Transaction, error) {
+	// Extract context info for logging
+	userID := ctx.Value(domain.UserIDKey)
+	requestID := ctx.Value(domain.ContextKey("request_id"))
+
+	s.logger.Info("Starting OpenAI transaction parsing",
+		zap.Any("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("input_text_length", len(text)),
+		zap.Int("available_accounts_count", len(accountsMap)),
+		zap.Int("estimated_transactions", strings.Count(text, ",")+1), // Rough estimate
+	)
+
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Build account information for the prompt
@@ -229,6 +244,16 @@ Rules:
 
 Parse this text:`, accountInfo, now)
 
+	// Calculate appropriate token limit based on input
+	maxTokens := s.calculateMaxTokens(text, len(accountsMap))
+
+	s.logger.Debug("Calculated token requirements",
+		zap.Any("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("calculated_max_tokens", maxTokens),
+		zap.Int("estimated_transactions", strings.Count(text, ",")+1),
+	)
+
 	req := openai.ChatCompletionRequest{
 		Model: openai.GPT3Dot5Turbo,
 		Messages: []openai.ChatCompletionMessage{
@@ -241,20 +266,56 @@ Parse this text:`, accountInfo, now)
 				Content: text,
 			},
 		},
-		MaxTokens:   1000,
+		MaxTokens:   maxTokens, // Use calculated token limit
 		Temperature: 0.1,
 	}
 
 	resp, err := s.client.CreateChatCompletion(ctx, req)
 	if err != nil {
+		s.logger.Error("OpenAI API call failed",
+			zap.Any("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.Error(err),
+			zap.String("model", string(req.Model)),
+			zap.Int("max_tokens", req.MaxTokens),
+			zap.Float32("temperature", req.Temperature),
+			zap.Int("input_text_length", len(text)),
+		)
 		return nil, fmt.Errorf("failed to call OpenAI API: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
+		s.logger.Error("OpenAI API returned no response choices",
+			zap.Any("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.String("model", string(req.Model)),
+		)
 		return nil, fmt.Errorf("no response from OpenAI API")
 	}
 
 	content := resp.Choices[0].Message.Content
+
+	s.logger.Debug("OpenAI API response received",
+		zap.Any("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("response_length", len(content)),
+		zap.String("finish_reason", string(resp.Choices[0].FinishReason)),
+		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
+		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
+		zap.Int("total_tokens", resp.Usage.TotalTokens),
+		zap.String("raw_response", content), // Only in debug level due to potentially sensitive data
+	)
+
+	// Check if response was truncated due to token limit
+	if resp.Choices[0].FinishReason == openai.FinishReasonLength {
+		s.logger.Warn("OpenAI response was truncated due to token limit",
+			zap.Any("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.Int("max_tokens_requested", maxTokens),
+			zap.Int("completion_tokens_used", resp.Usage.CompletionTokens),
+			zap.Int("response_length", len(content)),
+		)
+	}
 
 	// Parse the JSON response
 	var response struct {
@@ -271,15 +332,44 @@ Parse this text:`, accountInfo, now)
 	}
 
 	if err := json.Unmarshal([]byte(content), &response); err != nil {
+		// Check if this is due to truncated response
+		isTruncated := resp.Choices[0].FinishReason == openai.FinishReasonLength
+		s.logger.Error("Failed to parse OpenAI JSON response",
+			zap.Any("user_id", userID),
+			zap.Any("request_id", requestID),
+			zap.Error(err),
+			zap.Bool("response_truncated", isTruncated),
+			zap.String("finish_reason", string(resp.Choices[0].FinishReason)),
+			zap.String("raw_response", content),
+			zap.Int("response_length", len(content)),
+		)
+
+		if isTruncated {
+			return nil, fmt.Errorf("OpenAI response was truncated due to token limit. Consider reducing input size or increasing MaxTokens. Original error: %w", err)
+		}
+
 		return nil, fmt.Errorf("failed to parse OpenAI response: %w, content: %s", err, content)
 	}
 
+	s.logger.Info("Successfully parsed OpenAI response",
+		zap.Any("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("transactions_count", len(response.Transactions)),
+	)
+
 	// Convert to domain transactions
 	var transactions []domain.Transaction
-	for _, t := range response.Transactions {
+	for i, t := range response.Transactions {
 		// Parse date
 		date, err := time.Parse(time.RFC3339, t.Date)
 		if err != nil {
+			s.logger.Warn("Failed to parse transaction date, using current time",
+				zap.Any("user_id", userID),
+				zap.Any("request_id", requestID),
+				zap.Int("transaction_index", i),
+				zap.String("original_date", t.Date),
+				zap.Error(err),
+			)
 			// If parsing fails, use current time
 			date = time.Now()
 		}
@@ -300,17 +390,49 @@ Parse this text:`, accountInfo, now)
 
 		// Map account name to account ID
 		var accountID *string
+		originalAccountName := t.AccountName
 		if t.AccountName != "" && t.AccountName != "default" {
 			// Try to find matching account ID by name
 			if id, exists := accountsMap[t.AccountName]; exists {
 				accountID = &id
+				s.logger.Debug("Account matched exactly",
+					zap.Any("user_id", userID),
+					zap.Any("request_id", requestID),
+					zap.Int("transaction_index", i),
+					zap.String("account_name", t.AccountName),
+					zap.String("account_id", id),
+				)
 			} else {
 				// If account name doesn't match exactly, try case-insensitive match
 				for name, id := range accountsMap {
 					if strings.EqualFold(name, t.AccountName) {
 						accountID = &id
+						s.logger.Debug("Account matched case-insensitively",
+							zap.Any("user_id", userID),
+							zap.Any("request_id", requestID),
+							zap.Int("transaction_index", i),
+							zap.String("original_account_name", t.AccountName),
+							zap.String("matched_account_name", name),
+							zap.String("account_id", id),
+						)
 						break
 					}
+				}
+
+				if accountID == nil {
+					s.logger.Warn("No account match found",
+						zap.Any("user_id", userID),
+						zap.Any("request_id", requestID),
+						zap.Int("transaction_index", i),
+						zap.String("account_name", t.AccountName),
+						zap.Strings("available_accounts", func() []string {
+							names := make([]string, 0, len(accountsMap))
+							for name := range accountsMap {
+								names = append(names, name)
+							}
+							return names
+						}()),
+					)
 				}
 			}
 		}
@@ -318,6 +440,13 @@ Parse this text:`, accountInfo, now)
 		// If no account was matched or "default" was specified, use default account
 		if accountID == nil && defaultAccountID != "" {
 			accountID = &defaultAccountID
+			s.logger.Debug("Using default account",
+				zap.Any("user_id", userID),
+				zap.Any("request_id", requestID),
+				zap.Int("transaction_index", i),
+				zap.String("original_account_name", originalAccountName),
+				zap.String("default_account_id", defaultAccountID),
+			)
 		}
 
 		// Handle SubCategory - only set if not empty
@@ -340,5 +469,45 @@ Parse this text:`, accountInfo, now)
 		transactions = append(transactions, transaction)
 	}
 
+	s.logger.Info("Successfully converted transactions",
+		zap.Any("user_id", userID),
+		zap.Any("request_id", requestID),
+		zap.Int("final_transactions_count", len(transactions)),
+	)
+
 	return transactions, nil
+}
+
+// calculateMaxTokens estimates the required tokens based on input characteristics
+func (s *OpenAIService) calculateMaxTokens(inputText string, accountsCount int) int {
+	// Rough estimation:
+	// - System prompt: ~1000 tokens
+	// - Input text: ~1 token per 4 characters
+	// - Each transaction in response: ~150-200 tokens
+	// - Account info: ~50 tokens per account
+
+	estimatedTransactions := strings.Count(inputText, ",") + 1 // Rough estimate based on commas
+	if estimatedTransactions < 1 {
+		estimatedTransactions = 1
+	}
+
+	baseTokens := 1000                            // System prompt
+	inputTokens := len(inputText) / 4             // Input text estimation
+	accountTokens := accountsCount * 50           // Account information
+	responseTokens := estimatedTransactions * 200 // Response estimation (conservative)
+
+	totalEstimate := baseTokens + inputTokens + accountTokens + responseTokens
+
+	// Add 20% buffer and ensure minimum/maximum bounds
+	withBuffer := int(float64(totalEstimate) * 1.2)
+
+	// Bounds: minimum 1500, maximum 4000 (to stay within model limits)
+	if withBuffer < 1500 {
+		withBuffer = 1500
+	}
+	if withBuffer > 4000 {
+		withBuffer = 4000
+	}
+
+	return withBuffer
 }
