@@ -36,7 +36,6 @@ const (
 // Transaction represents a financial transaction
 type Transaction struct {
 	ID          int             `json:"id"`
-	AccountID   *string         `json:"account_id,omitempty"` // Nullable for backward compatibility
 	Amount      float64         `json:"amount"`
 	Category    Category        `json:"category"`
 	Currency    string          `json:"currency"`
@@ -60,7 +59,6 @@ type ParseInputResponse struct {
 
 // UpdateTransactionRequest represents the request for updating a transaction
 type UpdateTransactionRequest struct {
-	AccountID   *string         `json:"account_id,omitempty"`
 	Amount      float64         `json:"amount" binding:"required,gt=0"`
 	Currency    string          `json:"currency" binding:"required,len=3"`
 	Category    Category        `json:"category" binding:"required"`

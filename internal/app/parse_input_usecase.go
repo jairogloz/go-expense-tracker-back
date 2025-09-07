@@ -11,15 +11,13 @@ import (
 type ParseInputUseCase struct {
 	aiService          domain.AIService
 	transactionService domain.TransactionService
-	accountService     domain.AccountService
 }
 
 // NewParseInputUseCase creates a new parse input use case
-func NewParseInputUseCase(aiService domain.AIService, transactionService domain.TransactionService, accountService domain.AccountService) *ParseInputUseCase {
+func NewParseInputUseCase(aiService domain.AIService, transactionService domain.TransactionService) *ParseInputUseCase {
 	return &ParseInputUseCase{
 		aiService:          aiService,
 		transactionService: transactionService,
-		accountService:     accountService,
 	}
 }
 
@@ -31,27 +29,10 @@ func (uc *ParseInputUseCase) Execute(ctx context.Context, request domain.ParseIn
 		return nil, fmt.Errorf("user ID not found in context")
 	}
 
-	// Get user accounts for AI context
-	// Todo: cache in the future so we don't hit the database every time
-	accountsMap, err := uc.accountService.GetUserAccountsMap(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user accounts: %w", err)
-	}
-
-	// Parse the text using AI service with account context
-	transactions, err := uc.aiService.ParseTextToTransactionsWithAccounts(ctx, request.Text, accountsMap)
+	// Parse the text using AI service
+	transactions, err := uc.aiService.ParseTextToTransactions(ctx, request.Text)
 	if err != nil {
 		return nil, err
-	}
-
-	// For transactions without account_id, try to assign default account
-	defaultAccount, err := uc.accountService.GetDefaultAccount(ctx, userID)
-	if err == nil && defaultAccount != nil {
-		for i := range transactions {
-			if transactions[i].AccountID == nil {
-				transactions[i].AccountID = &defaultAccount.ID
-			}
-		}
 	}
 
 	// Save the transactions using transaction service

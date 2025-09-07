@@ -52,13 +52,12 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 	defer tx.Rollback(ctx)
 
 	// Prepare the insert statement
-	stmt := `INSERT INTO transactions (user_id, account_id, amount, currency, category, type, date, description, sub_category) 
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+	stmt := `INSERT INTO transactions (user_id, amount, currency, category, type, date, description, sub_category) 
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	for i, transaction := range transactions {
 		_, err := tx.Exec(ctx, stmt,
 			userID,
-			transaction.AccountID, // This can be nil
 			transaction.Amount,
 			transaction.Currency,
 			transaction.Category,
@@ -77,7 +76,6 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 				zap.String("currency", transaction.Currency),
 				zap.String("category", string(transaction.Category)),
 				zap.String("type", string(transaction.Type)),
-				zap.Any("account_id", transaction.AccountID),
 			)
 			return fmt.Errorf("failed to insert transaction: %w", err)
 		}
@@ -104,14 +102,13 @@ func (r *PostgreSQLTransactionRepository) SaveTransactions(ctx context.Context, 
 
 // GetTransactionByID retrieves a transaction by its ID for a specific user
 func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context, userID string, id int) (*domain.Transaction, error) {
-	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description, sub_category 
+	stmt := `SELECT id, user_id, amount, currency, category, type, date, description, sub_category 
 			 FROM transactions WHERE id = $1 AND user_id = $2`
 
 	var transaction domain.Transaction
 	err := r.db.QueryRow(ctx, stmt, id, userID).Scan(
 		&transaction.ID,
 		&transaction.UserID,
-		&transaction.AccountID,
 		&transaction.Amount,
 		&transaction.Currency,
 		&transaction.Category,
@@ -133,7 +130,7 @@ func (r *PostgreSQLTransactionRepository) GetTransactionByID(ctx context.Context
 
 // GetTransactions retrieves transactions for a specific user with pagination
 func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, userID string, limit, offset int) ([]domain.Transaction, error) {
-	stmt := `SELECT id, user_id, account_id, amount, currency, category, type, date, description, sub_category 
+	stmt := `SELECT id, user_id, amount, currency, category, type, date, description, sub_category 
 			 FROM transactions WHERE user_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, stmt, userID, limit, offset)
@@ -148,7 +145,6 @@ func (r *PostgreSQLTransactionRepository) GetTransactions(ctx context.Context, u
 		err := rows.Scan(
 			&transaction.ID,
 			&transaction.UserID,
-			&transaction.AccountID,
 			&transaction.Amount,
 			&transaction.Currency,
 			&transaction.Category,
@@ -177,7 +173,6 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	CREATE TABLE IF NOT EXISTS transactions (
 		id SERIAL PRIMARY KEY,
 		user_id UUID NOT NULL,
-		account_id UUID,
 		amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
 		currency VARCHAR(3) NOT NULL DEFAULT 'USD',
 		category VARCHAR(50) NOT NULL,
@@ -186,10 +181,7 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 		description TEXT,
 		sub_category VARCHAR(100),
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		CONSTRAINT fk_transactions_account_id 
-			FOREIGN KEY (account_id) REFERENCES accounts(id) 
-			ON DELETE SET NULL
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);`
 
 	_, err := r.db.Exec(ctx, createTableStmt)
@@ -206,9 +198,6 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 	CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON transactions(user_id, category);
 	CREATE INDEX IF NOT EXISTS idx_transactions_user_type ON transactions(user_id, type);
 	CREATE INDEX IF NOT EXISTS idx_transactions_user_created_at ON transactions(user_id, created_at DESC);
-	-- Account-specific indexes for balance calculations
-	CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date);
-	CREATE INDEX IF NOT EXISTS idx_transactions_account_amount ON transactions(account_id, amount);
 	-- Individual indexes for filtering
 	CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 	CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
@@ -229,13 +218,12 @@ func (r *PostgreSQLTransactionRepository) CreateTransactionsTable(ctx context.Co
 // UpdateTransaction updates an existing transaction for a specific user
 func (r *PostgreSQLTransactionRepository) UpdateTransaction(ctx context.Context, userID string, transaction *domain.Transaction) error {
 	stmt := `UPDATE transactions 
-			 SET account_id = $3, amount = $4, currency = $5, category = $6, type = $7, date = $8, description = $9, sub_category = $10, updated_at = CURRENT_TIMESTAMP
+			 SET amount = $3, currency = $4, category = $5, type = $6, date = $7, description = $8, sub_category = $9, updated_at = CURRENT_TIMESTAMP
 			 WHERE id = $1 AND user_id = $2`
 
 	result, err := r.db.Exec(ctx, stmt,
 		transaction.ID,
 		userID,
-		transaction.AccountID,
 		transaction.Amount,
 		transaction.Currency,
 		transaction.Category,

@@ -56,7 +56,7 @@ func main() {
 	fmt.Println("\nLogging setup is ready for your /parse endpoint!")
 	fmt.Println("Key logging points implemented:")
 	fmt.Println("- Handler level: Request/response logging with timing")
-	fmt.Println("- OpenAI Service level: API call logging, JSON parsing errors, account mapping")
+	fmt.Println("- OpenAI Service level: API call logging, JSON parsing errors")
 	fmt.Println("- Repository level: Database transaction logging")
 	fmt.Println("- Structured logging with user_id and request_id correlation")
 

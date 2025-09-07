@@ -257,7 +257,6 @@ func (h *TransactionHandler) UpdateTransaction(c *gin.Context) {
 	transaction := &domain.Transaction{
 		ID:          id,
 		UserID:      userID, // Ensure user ID is set
-		AccountID:   request.AccountID,
 		Amount:      request.Amount,
 		Currency:    request.Currency,
 		Category:    request.Category,
