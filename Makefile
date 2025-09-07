@@ -1,4 +1,4 @@
-.PHONY: build run test clean deps fmt lint help
+.PHONY: build run test clean deps fmt lint help migrate-up migrate-up-one migrate-down-one migrate-status migrate-create
 
 # Build the application
 build:
@@ -42,12 +42,44 @@ help:
 	@echo "  db-up        - Start PostgreSQL database with Docker"
 	@echo "  db-down      - Stop PostgreSQL database"
 	@echo "  db-connect   - Connect to PostgreSQL database"
+	@echo "  migrate-up   - Run all database migrations up"
+	@echo "  migrate-up-one - Run one database migration up"
+	@echo "  migrate-down-one - Run one database migration down"
+	@echo "  migrate-status - Show current migration status"
+	@echo "  migrate-create - Create new migration (requires name=migration_name)"
 	@echo "  docker-build - Build Docker image"
 	@echo "  docker-run   - Run Docker container"
 	@echo "  compose-up   - Start all services with docker-compose"
 	@echo "  compose-down - Stop all services"
 	@echo "  compose-logs - View logs from all services"
 	@echo "  help         - Show this help message"
+
+# Database configuration (can be overridden with environment variables)
+DB_HOST ?= localhost
+DB_PORT ?= 5432
+DB_USER ?= expense_user
+DB_PASSWORD ?= expense_password
+DB_NAME ?= expense_tracker
+DB_SSL_MODE ?= disable
+
+# Construct database URL
+DB_URL = postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL_MODE)
+
+# Database migrations (requires golang-migrate: brew install golang-migrate)
+migrate-up:
+	migrate -path migrations -database "$(DB_URL)" -verbose up
+
+migrate-up-one:
+	migrate -path migrations -database "$(DB_URL)" -verbose up 1
+
+migrate-down-one:
+	migrate -path migrations -database "$(DB_URL)" -verbose down 1
+
+migrate-status:
+	migrate -path migrations -database "$(DB_URL)" version
+
+migrate-create:
+	migrate create -ext sql -dir migrations -seq $(name)
 
 # Development database setup (requires docker)
 db-up:
