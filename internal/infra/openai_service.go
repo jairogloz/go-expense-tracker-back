@@ -12,10 +12,77 @@ import (
 	"go.uber.org/zap"
 )
 
+// ExpenseCategories defines the available expense categories
+var ExpenseCategories = []string{
+	"guilt_free_spending",
+	"fixed_costs",
+	"investments",
+	"savings_goals",
+}
+
+// IncomeCategories defines the available income categories
+var IncomeCategories = []string{
+	"salary",
+	"freelance",
+	"investments",
+	"bonus",
+}
+
+// Subcategories defines the subcategories for each main category
+var Subcategories = map[string][]string{
+	"fixed_costs": {
+		"house_payments",
+		"utilities",
+		"internet_and_phone",
+		"insurance",
+		"loan_payments",
+		"subscriptions",
+	},
+	"investments": {
+		"afore",
+		"cetes",
+		"mutual_funds",
+		"retirement_savings",
+		"stocks",
+		"real_estate",
+		"crypto",
+	},
+	"savings_goals": {
+		"emergency_fund",
+		"vacation_savings",
+	},
+	"guilt_free_spending": {
+		"dining_out",
+		"coffee_and_snacks",
+		"clothing_and_accessories",
+		"hobbies",
+		"entertainment",
+		"fitness_and_wellness",
+		"gifts_and_celebrations",
+		"travel",
+		"gadgets_and_tech",
+	},
+}
+
 // OpenAIService implements the AIService interface
 type OpenAIService struct {
 	client *openai.Client
 	logger *zap.Logger
+}
+
+// buildCategoriesString builds the categories section of the prompt
+func buildCategoriesString() string {
+	expenseCategories := strings.Join(ExpenseCategories, ", ")
+	incomeCategories := strings.Join(IncomeCategories, ", ")
+
+	return fmt.Sprintf("Available categories:\n- Expense: %s\n- Income: %s",
+		expenseCategories, incomeCategories)
+}
+
+// buildSubcategoriesString builds the subcategories JSON section of the prompt
+func buildSubcategoriesString() string {
+	subcategoriesJSON, _ := json.MarshalIndent(Subcategories, "", "  ")
+	return fmt.Sprintf("Subcategories for each category are:\n%s", string(subcategoriesJSON))
 }
 
 // NewOpenAIService creates a new OpenAI service
@@ -41,47 +108,16 @@ func (s *OpenAIService) ParseTextToTransactions(ctx context.Context, text string
 	)
 
 	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Build dynamic categories and subcategories
+	categoriesSection := buildCategoriesString()
+	subcategoriesSection := buildSubcategoriesString()
+
 	systemPrompt := fmt.Sprintf(`You are a financial transaction parser. Parse the given text into structured transaction data.
 
-Available categories:
-- Expense: guilt_free_spending, fixed_costs, investments, savings_goals
-- Income: salary, freelance, investments, bonus
+%s
 
-Subcategories for each category are:
-{
-  "fixed_costs": [
-    "house_payments",
-    "utilities",
-    "internet_and_phone",
-    "insurance",
-    "loan_payments",
-    "subscriptions"
-  ],
-  "investments": [
-    "afore",
-    "cetes",
-    "mutual_funds",
-    "retirement_savings",
-    "stocks",
-    "real_estate",
-    "crypto"
-  ],
-  "savings_goals": [
-    "emergency_fund",
-    "vacation_savings"
-  ],
-  "guilt_free_spending": [
-    "dining_out",
-    "coffee_and_snacks",
-    "clothing_and_accessories",
-    "hobbies",
-    "entertainment",
-    "fitness_and_wellness",
-    "gifts_and_celebrations",
-    "travel",
-    "gadgets_and_tech"
-  ]
-}
+%s
 
 Return a JSON array of transactions with the following structure:
 {
@@ -108,7 +144,7 @@ Rules:
 7. Do NOT include the amount or currency in the description field - keep descriptions focused on what the transaction was for
 8. Consider this date as the current date: %s
 
-Parse this text:`, now)
+Parse this text:`, categoriesSection, subcategoriesSection, now)
 
 	// Calculate appropriate token limit based on input
 	maxTokens := s.calculateMaxTokens(text)
